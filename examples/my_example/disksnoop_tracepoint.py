@@ -1,15 +1,4 @@
-#!/usr/bin/python
-#
-# urandomread  Example of instrumenting a kernel tracepoint.
-#              For Linux, uses BCC, BPF. Embedded C.
-#
-# REQUIRES: Linux 4.7+ (BPF_PROG_TYPE_TRACEPOINT support).
-#
-# Test by running this, then in another shell, run:
-#     dd if=/dev/urandom of=/dev/null bs=1k count=5
-#
-# Copyright 2016 Netflix, Inc.
-# Licensed under the Apache License, Version 2.0 (the "License")
+#!/usr/bin/python3
 
 from __future__ import print_function
 from bcc import BPF
