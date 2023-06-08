@@ -24,7 +24,7 @@ class MetricKey(ct.Structure):
     _fields_ = [
         ("src_port", ct.c_uint16)
     ]
-class MetricData(ct.LittleEndianStructure):
+class MetricData(ct.Structure):
     _pack_ = 1
     _fields_ = [
         ("tag", ct.c_char*TAG_LENGTH),
