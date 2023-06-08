@@ -4,8 +4,6 @@
 #include <uapi/linux/ip.h>
 #include <uapi/linux/tcp.h>
 
-
-#define MAX_PACKET_LENGTH 54425
 // Layer2 Constants
 #define ETH_HLEN 14
 
@@ -26,24 +24,28 @@
 #define PORT_TO_MONITOR 80
 
 // Payload Struct
-#define MAX_ITER_PAYLOAD1000 5
+#define MAX_PACKET_LENGTH1000 63535
+#define MAX_ITER_PAYLOAD1000 2
 #define PAYLOAD_LENGTH1000 1000
 struct payload1000_t{
     __u8 data[PAYLOAD_LENGTH1000];
 };
 
+#define MAX_PACKET_LENGTH100 64535
 #define MAX_ITER_PAYLOAD100 10
 #define PAYLOAD_LENGTH100 100
 struct payload100_t{
     __u8 data[PAYLOAD_LENGTH100];
 };
 
+#define MAX_PACKET_LENGTH10 65425
 #define MAX_ITER_PAYLOAD10 10
 #define PAYLOAD_LENGTH10 10
 struct payload10_t{
     __u8 data[PAYLOAD_LENGTH10];
 };
 
+#define MAX_PACKET_LENGTH1 65525
 #define MAX_ITER_PAYLOAD1 10
 #define PAYLOAD_LENGTH1 1
 struct payload1_t{
@@ -77,7 +79,7 @@ BPF_HASH(tail_state, struct __sk_buff *, struct tail_state_t);
 		flag = 1;				                            \
 })
 
-int http_payload_parser(struct __sk_buff *skb){
+int http_payload_parser10(struct __sk_buff *skb){
     struct __sk_buff *sKey = skb;
     struct tail_state_t *state = tail_state.lookup(&sKey);
     if(state == NULL){
@@ -85,51 +87,16 @@ int http_payload_parser(struct __sk_buff *skb){
     }
 
     // Payload pointers
-	struct payload1000_t *payload1000;
-	struct payload100_t *payload100;
 	struct payload10_t *payload10;
 	struct payload1_t *payload1;
 
     __u16 hdrlen, offset;
     __u8 flag;
-    // if(state->offset < MAX_PACKET_LENGTH)
-    //     offset = state->offset;
     hdrlen = 0;
-    offset = state->offset < MAX_PACKET_LENGTH ? state->offset: 0;
+    offset = state->offset < MAX_PACKET_LENGTH10 ? state->offset: 0;
     
-
-    // Payload1000
-PAYLOAD_PARSER_1000:
-    for(int loop = 0; loop < MAX_ITER_PAYLOAD1000; loop++){
-        offset += hdrlen;
-        flag = 0;
-        check_offset(skb, offset, payload1000, flag);
-        if(flag){
-            offset -= hdrlen;
-            goto PAYLOAD_PARSER_100;
-        }
-        hdrlen = PAYLOAD_LENGTH1000;
-        bpf_trace_printk("%02x %04d", payload1000->data[0],offset);
-    }
-
-    // Payload100
-PAYLOAD_PARSER_100:;
-    bpf_trace_printk("Payload1000: %d", offset+hdrlen);
-    for(int loop = 0; loop < MAX_ITER_PAYLOAD100; loop++){
-        offset += hdrlen;
-        flag = 0;
-        check_offset(skb, offset, payload100, flag);
-        if(flag){
-            offset -= hdrlen;
-            goto PAYLOAD_PARSER_10;
-        }
-        hdrlen = PAYLOAD_LENGTH100;
-        bpf_trace_printk("%02x %04d", payload100->data[0],offset);
-    }
-
     // Payload10
 PAYLOAD_PARSER_10:;
-    bpf_trace_printk("Payload100: %d", offset+hdrlen);
     for(int loop = 0; loop < MAX_ITER_PAYLOAD10; loop++){
         offset += hdrlen;
         flag = 0;
@@ -162,7 +129,109 @@ PAYLOAD_PARSER_0:;
     bpf_trace_printk("Payload1: %d", offset);
 
 DELETE_STATE:;
-    // tail_state.delete(&sKey);
+    tail_state.delete(&sKey);
+    bpf_trace_printk("Tail State Deleted %llx\n\n", sKey);
+
+PAYLOAD_PARSER_EXIT:;   
+    return TC_ACT_OK;
+}
+
+int http_payload_parser100(struct __sk_buff *skb){
+    struct __sk_buff *sKey = skb;
+    struct tail_state_t *state = tail_state.lookup(&sKey);
+    if(state == NULL){
+        goto PAYLOAD_PARSER_EXIT;
+    }
+
+    // Payload pointers
+	struct payload100_t *payload100;
+
+    __u16 hdrlen, offset;
+    __u8 flag;
+    hdrlen = 0;
+    offset = state->offset < MAX_PACKET_LENGTH100 ? state->offset: 0;
+    
+    // Payload100
+PAYLOAD_PARSER_100:;
+    for(int loop = 0; loop < MAX_ITER_PAYLOAD100; loop++){
+        offset += hdrlen;
+        flag = 0;
+        check_offset(skb, offset, payload100, flag);
+        if(flag){
+            offset -= hdrlen;
+            goto UPDATE_STATE;
+        }
+        hdrlen = PAYLOAD_LENGTH100;
+        bpf_trace_printk("%02x %04d", payload100->data[0],offset);
+    }
+
+UPDATE_STATE:;
+    offset += hdrlen;
+    bpf_trace_printk("Payload100: %d", offset);
+
+    state->offset = offset;
+
+    // Payload10
+PAYLOAD_PARSER_10:;
+    prog_array.call(skb, 4);
+
+    // If tail call fails, delete state & return
+DELETE_STATE:;
+    tail_state.delete(&sKey);
+    bpf_trace_printk("Tail State Deleted %llx\n\n", sKey);
+
+PAYLOAD_PARSER_EXIT:;   
+    return TC_ACT_OK;
+}
+
+int http_payload_parser1000(struct __sk_buff *skb){
+    struct __sk_buff *sKey = skb;
+    struct tail_state_t *state = tail_state.lookup(&sKey);
+    if(state == NULL){
+        goto PAYLOAD_PARSER_EXIT;
+    }
+
+    // Payload pointers
+	struct payload1000_t *payload1000;
+
+    __u16 hdrlen, offset;
+    __u8 flag;
+    hdrlen = 0;
+    offset = state->offset < MAX_PACKET_LENGTH1000 ? state->offset: 0;
+    
+    // Payload1000
+    for(int loop = 0; loop < MAX_ITER_PAYLOAD1000; loop++){
+        offset += hdrlen;
+        flag = 0;
+        check_offset(skb, offset, payload1000, flag);
+        if(flag){
+            offset -= hdrlen;
+            goto UPDATE_STATE;
+        }
+        hdrlen = PAYLOAD_LENGTH1000;
+        bpf_trace_printk("%02x %04d", payload1000->data[0],offset);
+    }
+
+UPDATE_STATE:;
+    offset += hdrlen;
+    bpf_trace_printk("Payload1000: %d", offset);
+
+    state->offset = offset;
+
+    // If 1000 bytes are not available move to 100 bytes parser
+    if(flag) goto PAYLOAD_PARSER_100;
+
+PAYLOAD_PARSER_1000:
+    prog_array.call(skb, 2);
+
+    // Payload100
+PAYLOAD_PARSER_100:;
+    prog_array.call(skb, 3);
+
+    // If tail call fails, delete state & return
+DELETE_STATE:;
+    tail_state.delete(&sKey);
+    bpf_trace_printk("Tail State Deleted %llx\n\n", sKey);
 
 PAYLOAD_PARSER_EXIT:;   
     return TC_ACT_OK;
@@ -212,9 +281,9 @@ int tcp_header_parser(struct __sk_buff *skb) {
     bpf_trace_printk("IPv4 header length: %d %d", iph, payload_length+ETH_HLEN);
     bpf_trace_printk("TCP header length: %d", hdrlen);
 
-    offset += hdrlen;
 
 UPDATE_STATE:;
+    offset += hdrlen;
     struct tail_state_t state = {
         .offset = 0,
     };
@@ -223,6 +292,10 @@ UPDATE_STATE:;
 
 TAIL_CALL:;
     prog_array.call(skb, 2);
+
+DELETE_STATE:;
+    tail_state.delete(&sKey);
+    bpf_trace_printk("Tail State Deleted %llx\n\n", sKey);
 
 TCP_PARSER_EXIT:;
     return TC_ACT_OK;

@@ -22,13 +22,17 @@ import socket
 #             (cpu,
 #             skb_event.magic))
 
-bpf = BPF(src_file="tc_tail_call.c",debug=0)
+bpf = BPF(src_file="tc_http_parser.c",debug=0)
 fn = bpf.load_func("tcp_header_parser",BPF.SCHED_CLS)
 
-tail_fn = bpf.load_func("http_payload_parser", BPF.SCHED_CLS)
-prog_array = bpf.get_table("prog_array")
-prog_array[ct.c_int(2)] = ct.c_int(tail_fn.fd)
+tail_fn1000 = bpf.load_func("http_payload_parser1000", BPF.SCHED_CLS)
+tail_fn100 = bpf.load_func("http_payload_parser100", BPF.SCHED_CLS)
+tail_fn10 = bpf.load_func("http_payload_parser10", BPF.SCHED_CLS)
 
+prog_array = bpf.get_table("prog_array")
+prog_array[ct.c_int(2)] = ct.c_int(tail_fn1000.fd)
+prog_array[ct.c_int(3)] = ct.c_int(tail_fn100.fd)
+prog_array[ct.c_int(4)] = ct.c_int(tail_fn10.fd)
 
 ipr = IPRoute()
 
