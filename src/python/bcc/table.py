@@ -609,7 +609,13 @@ class TableBase(MutableMapping):
                 break
 
         for i in range(0, total):
-            yield (ct_keys[i], ct_values[i])
+            k = ct_keys[i]
+            v = ct_values[i]
+            if not isinstance(k, ct.Structure):
+                k = self.Key(k)
+            if not isinstance(v, ct.Structure):
+                v = self.Leaf(v)
+            yield (k, v)
 
     def zero(self):
         # Even though this is not very efficient, we grab the entire list of
@@ -651,7 +657,7 @@ class TableBase(MutableMapping):
             raise StopIteration()
         return next_key
 
-    def decode_c_struct(self, tmp, buckets, bucket_fn, bucket_sort_fn):
+    def decode_c_struct(self, tmp, buckets, bucket_fn, bucket_sort_fn, index_max=log2_index_max):
         f1 = self.Key._fields_[0][0]
         f2 = self.Key._fields_[1][0]
         # The above code assumes that self.Key._fields_[1][0] holds the
@@ -665,7 +671,7 @@ class TableBase(MutableMapping):
             bucket = getattr(k, f1)
             if bucket_fn:
                 bucket = bucket_fn(bucket)
-            vals = tmp[bucket] = tmp.get(bucket, [0] * log2_index_max)
+            vals = tmp[bucket] = tmp.get(bucket, [0] * index_max)
             slot = getattr(k, f2)
             vals[slot] = v.value
         buckets_lst = list(tmp.keys())
@@ -775,7 +781,7 @@ class TableBase(MutableMapping):
         if isinstance(self.Key(), ct.Structure):
             tmp = {}
             buckets = []
-            self.decode_c_struct(tmp, buckets, bucket_fn, bucket_sort_fn)
+            self.decode_c_struct(tmp, buckets, bucket_fn, bucket_sort_fn, linear_index_max)
 
             for bucket in buckets:
                 vals = tmp[bucket]
